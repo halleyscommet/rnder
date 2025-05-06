@@ -94,15 +94,16 @@ def render():
             y1b: float = heightRatio / z1
             y2a: float = (height - heightRatio) / z2
             y2b: float = heightRatio / z2
-            
-# draw here
-# draw_half("#6d7178", heightS // 2)
-# draw_half("#8c602a", heightS)
+
 
 Init(cam, polys)
+      
+# draw here
+draw_half("#6d7178", heightS // 2)
+draw_half("#8c602a", heightS)
 
-# put_pixel(100, 100, "#0000ff")
-# draw_line(0, 0, widthS, heightS)
+put_pixel(100, 100, "#0000ff")
+draw_line(0, 0, widthS, heightS)
 
 # draw to screen
 screen.update()
