@@ -16,10 +16,6 @@ SHOULD_RASTERIZE = 1
 RASTER_RESOLUTION = 4
 RASTER_NUM_VERTS = 4
 
-# camera and polygons
-cam = Camera()
-polys = [Polygon() for _ in range(MAX_POLYS)]
-
 # setup
 screen = turtle.Screen()
 screen.tracer(0)
@@ -29,7 +25,10 @@ loop = True
 
 delta_time: float = 0.0
 
-screenSpaceVisibilityPlanes: int = 0
+cam = Camera()
+polys = [Polygon() for _ in range(MAX_POLYS)]
+
+screenSpaceVisibilityPlanes: int
 screenSpacePolys = [[ScreenSpacePoly() for _ in range(MAX_VERTS)] for _ in range(MAX_POLYS)]
 
 # screen info
@@ -40,7 +39,6 @@ heightS = screen.window_height()
 screen.setworldcoordinates(0, heightS, widthS, 0)
 
 print(f"Width: {widthS}\nHeight: {heightS}")
-print(f"CamPos: {cam.camPos.x}, {cam.camPos.y}")
 
 t = turtle.Turtle()
 t.ht()
@@ -97,10 +95,15 @@ def draw_line(x0, y0, x1, y1):
 # render shit
 def render():
     t.clear()
-    for polyIdx in range(MAX_POLYS):
-        for vertIdx in range(polys[polyIdx].vertCnt - 1):
-            p1: Vec2 = polys[polyIdx].vert[vertIdx]
-            p2: Vec2 = polys[polyIdx].vert[vertIdx + 1]
+    
+    if SHOULD_RASTERIZE:
+        clear_raster_buffer()
+        screenSpaceVisibilityPlanes = 0
+    
+    for polyIdx in range(0, MAX_POLYS, 1):
+        for i in range(0, min(polys[polyIdx].vertCnt - 1, MAX_VERTS), 1):
+            p1: Vec2 = polys[polyIdx].vert[i]
+            p2: Vec2 = polys[polyIdx].vert[i + 1]
             height: float = -polys[polyIdx].height
             
             if is_face_front(cam.camPos, p1, p2) > 0:
@@ -154,6 +157,25 @@ def render():
             draw_line(centerWidth + x1, centerHeight + y1b, centerWidth + x2, centerHeight + y2b)
             draw_line(centerWidth + x1, centerHeight + y1a, centerWidth + x1, centerHeight + y1b)
             draw_line(centerWidth + x2, centerHeight + y2a, centerWidth + x2, centerHeight + y2b)
+            
+            if SHOULD_RASTERIZE:
+                planeIdx = screenSpaceVisibilityPlanes
+                print(f"PlaneIdx: {planeIdx}")
+                print(f"VertCnt: {polys[polyIdx].vertCnt}")
+                
+                screenSpacePolys[planeIdx][i].vert[0].x = centerWidth + x2
+                screenSpacePolys[planeIdx][i].vert[0].y = centerHeight + y2a
+                screenSpacePolys[planeIdx][i].vert[1].x = centerWidth + x1
+                screenSpacePolys[planeIdx][i].vert[1].y = centerHeight + y1a
+                screenSpacePolys[planeIdx][i].vert[2].x = centerWidth + x1
+                screenSpacePolys[planeIdx][i].vert[2].y = centerHeight + y1b
+                screenSpacePolys[planeIdx][i].vert[3].x = centerWidth + x2
+                screenSpacePolys[planeIdx][i].vert[3].y = centerHeight + y2b
+                
+                screenSpacePolys[planeIdx][i].planeIdInPoly = i
+                screenSpaceVisibilityPlanes += 1
+                
+    rasterize()
  
 # cross product of 2D points
 # fuck if i know how this works
@@ -203,8 +225,8 @@ def camera_translate(delta_time: float):
     elif keyboard.is_pressed("d"):
         cam.camAngle += ROT_SPEED * delta_time
         
-    print(f"CamPos: {cam.camPos.x}, {cam.camPos.y}")
-    print(f"CamAngle: {cam.camAngle}")
+    # print(f"CamPos: {cam.camPos.x}, {cam.camPos.y}")
+    # print(f"CamAngle: {cam.camAngle}")
 
 def point_in_poly(nvert, vertx: float, verty: float, testx: float, testy: float) -> bool:
     i = 0
@@ -238,7 +260,21 @@ def rasterize():
     pixel_buff = np.zeros((widthS, heightS, 3), dtype=np.uint8)
     pixel_buff.fill(0)
     
-    # for 
+    for polyIdx in range(screenSpaceVisibilityPlanes - 1, -1, -1):
+        for nextv in range(RASTER_NUM_VERTS):
+            planeId = screenSpacePolys[polyIdx][nextv].planeIdInPoly
+            
+            vx[nextv] = screenSpacePolys[polyIdx][nextv].vert[0].x
+            vy[nextv] = screenSpacePolys[polyIdx][nextv].vert[0].y
+        
+        for y in range(0, heightS, RASTER_RESOLUTION):
+            for x in range(0, widthS, 1):
+                if pixel_buff[y][x] == 1:
+                    continue
+                    
+                if point_in_poly(RASTER_NUM_VERTS, vx, vy, x, y) == 1:
+                    put_pixel(x, y, "#64FF00")
+                    pixel_buff[y][x] = 1
 
 while loop:
     if keyboard.is_pressed("esc"):
@@ -259,3 +295,7 @@ while loop:
     # end time
     end: float = time.time()
     delta_time = (end - start) / 1000.0
+    
+    # fps
+    fps = 1 / delta_time if delta_time > 0 else 0
+    print(f"FPS: {fps:.2f}")
